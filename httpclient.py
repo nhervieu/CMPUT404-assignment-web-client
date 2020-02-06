@@ -22,74 +22,103 @@ import sys
 import socket
 import re
 # you may use urllib to encode data appropriately
-import urllib.parse
+from urllib.parse import urlparse
 
 def help():
-    print("httpclient.py [GET/POST] [URL]\n")
+	print("httpclient.py [GET/POST] [URL]\n")
 
 class HTTPResponse(object):
-    def __init__(self, code=200, body=""):
-        self.code = code
-        self.body = body
+	def __init__(self, code=200, body=""):
+		self.code = code
+		print("code: ", self.code)
+		self.body = body
+		print("body: ", self.body)
 
 class HTTPClient(object):
-    #def get_host_port(self,url):
+	#def get_host_port(self,url):
 
-    def connect(self, host, port):
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect((host, port))
-        return None
+	def connect(self, host, port):
+		self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		print('host: ', host)
+		print("port: ", port)
+		self.socket.connect((host, port))
+		return None
 
-    def get_code(self, data):
-        return None
+	def get_code(self, data):
+		return None
 
-    def get_headers(self,data):
-        return None
+	def get_headers(self,data):
+		return None
 
-    def get_body(self, data):
-        return None
-    
-    def sendall(self, data):
-        self.socket.sendall(data.encode('utf-8'))
-        
-    def close(self):
-        self.socket.close()
+	def get_body(self, data):
+		return None
 
-    # read everything from the socket
-    def recvall(self, sock):
-        buffer = bytearray()
-        done = False
-        while not done:
-            part = sock.recv(1024)
-            if (part):
-                buffer.extend(part)
-            else:
-                done = not part
-        return buffer.decode('utf-8')
+	def sendall(self, data):
+		#https://stackoverflow.com/questions/34192093/python-socket-get/34192135
+		#data = "GET / HTTP/1.1\r\nHost: www.cnn.com\r\n\r\n"
+		data = "GET / HTTP/1.1\r\nHost: " + data.netloc+data.path+data.params+data.query+data.fragment+"\r\n\r\n"
+		self.socket.sendall(data.encode('utf-8'))
+		#print(type(self.socket.recv(10000)))
+		#print(result.split('\r'))
 
-    def GET(self, url, args=None):
-        code = 500
-        body = ""
-        return HTTPResponse(code, body)
+	def close(self):
+		self.socket.close()
 
-    def POST(self, url, args=None):
-        code = 500
-        body = ""
-        return HTTPResponse(code, body)
+	# read everything from the socket
+	def recvall(self, sock):
+		buffer = bytearray()
+		done = False
+		while not done:
+			part = sock.recv(1024)
+			if (part):
+				buffer.extend(part)
+			else:
+				done = not part
+		return buffer.decode('utf-8')
 
-    def command(self, url, command="GET", args=None):
-        if (command == "POST"):
-            return self.POST( url, args )
-        else:
-            return self.GET( url, args )
-    
+	def GET(self, url, args=None):
+		url = urlparse(url)
+		#print("url", url.netloc)
+		self.connect(url.netloc, 80)
+		#print("connected")
+		self.sendall(url)
+		#print("sendall")
+		message = self.recvall(self.socket)
+		#print(message)
+		m = re.search("HTTP\/1\.1 ([0-9]{3})[ A-Za-z]+(.*)",message,re.DOTALL)
+		code = m.group(1)
+		body = message
+		#body = m.group(2)
+		self.close()
+		#print(code)
+		#print(body)
+		return HTTPResponse(code, body)
+
+	def POST(self, url, args=None):
+		url = urlparse(url)
+		self.connect(url.netloc, 80)
+		self.sendall(url)
+		message = self.recvall(self.socket)
+		m = re.search("HTTP\/1\.1 ([0-9]{3})[ A-Za-z]+(.*)",message,re.DOTALL)
+		code = m.group(1)
+		body = message
+		self.close()
+		return HTTPResponse(code, body)
+
+	def command(self, url, command='get', args=None):
+		if (command.upper() == "POST"):
+			return self.POST( url, args )
+		else:
+			print("get request\n")
+			return self.GET( url, args )
+
 if __name__ == "__main__":
-    client = HTTPClient()
-    command = "GET"
-    if (len(sys.argv) <= 1):
-        help()
-        sys.exit(1)
-    elif (len(sys.argv) == 3):
-        print(client.command( sys.argv[2], sys.argv[1] ))
-    else:
-        print(client.command( sys.argv[1] ))
+	client = HTTPClient()
+	command = "GET"
+	if (len(sys.argv) <= 1):
+		help()
+		sys.exit(1)
+	elif (len(sys.argv) == 3):
+		print(client.command( sys.argv[2], sys.argv[1] ))
+	else:
+		print(client.command( sys.argv[1] ))
