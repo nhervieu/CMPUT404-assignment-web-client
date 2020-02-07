@@ -78,17 +78,35 @@ class HTTPClient(object):
 			else:
 				return url.netloc, port
 
-	def sendall(self, data, port, host, request):
+	def sendall(self, data, port, host, request='GET '):
 
-		if not data.netloc:
-			path = data.params+data.query+data.fragment
-		else:
-			path = data.path+data.params+data.query+data.fragment
+		if request == "GET ":
+			if not data.netloc:
+				path = data.params+data.query+data.fragment
+			else:
+				path = data.path+data.params+data.query+data.fragment
 
-		if not path:
-			path = "/"
+			if not path:
+				path = "/"
 
-		data = request + path + " HTTP/1.1\r\nHost: " + host + "\r\n\r\n"
+			data = request + path + " HTTP/1.1\r\nHost: " + host + "\r\n" + "Content-Length: "+ "0" +"\r\n\r\n"
+
+		elif request == "POST ":
+			if not data.netloc:
+				path = data.params
+			else:
+				path = data.path+data.params
+
+			if not path:
+				path = "/"
+
+			if data.query != "":
+				data = request + path + " HTTP/1.1\r\nHost: " + host + "Content-Length: "+ str(len(data.query)) + "\r\n" + "data.query"+ "\r\n\r\n"
+			else:
+				data = request + path + " HTTP/1.1\r\nHost: " + host  + "\r\n" + "Content-Length: "+ "0" +"\r\n\r\n"
+
+
+		print(data)
 		self.socket.sendall(data.encode('utf-8'))
 
 	def close(self):
