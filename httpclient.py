@@ -30,17 +30,13 @@ def help():
 class HTTPResponse(object):
 	def __init__(self, code=200, body=""):
 		self.code = code
-		print("code: ", self.code)
 		self.body = body
-		print("body: ", self.body)
 
 class HTTPClient(object):
 	#def get_host_port(self,url):
 
 	def connect(self, host, port):
 		self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		print('host: ', host)
-		print("port: ", port)
 		self.socket.connect((host, port))
 		return None
 
@@ -53,13 +49,47 @@ class HTTPClient(object):
 	def get_body(self, data):
 		return None
 
-	def sendall(self, data):
-		#https://stackoverflow.com/questions/34192093/python-socket-get/34192135
-		#data = "GET / HTTP/1.1\r\nHost: www.cnn.com\r\n\r\n"
-		data = "GET / HTTP/1.1\r\nHost: " + data.netloc+data.path+data.params+data.query+data.fragment+"\r\n\r\n"
+	def parse_result(self,data):
+		m = re.search("HTTP\/1\.[10] ([0-9]{3})[ A-Za-z]+(.*)",data,re.DOTALL)
+		code = int(m.group(1))
+		if code == 404:
+			return code, "File not Found"
+		else:
+			return code, data
+
+	def url_cleanup(self, url):
+		if url[0:3] == 'www':
+			return "http://" + url
+		elif url[0:4] != "http":
+			return "https://www." + url
+		else:
+			return url
+
+	#return host, port, 
+	def url_parse(self, url):
+		if not url.netloc:
+			return url.path, port
+		else: 
+			host_given = url.netloc.find(":")
+			if host_given != -1:
+				host = url.netloc[:host_given]
+				port = int(url.netloc[host_given+1:])
+				return host, port
+			else:
+				return url.netloc, port
+
+	def sendall(self, data, port, host, request):
+
+		if not data.netloc:
+			path = data.params+data.query+data.fragment
+		else:
+			path = data.path+data.params+data.query+data.fragment
+
+		if not path:
+			path = "/"
+
+		data = request + path + " HTTP/1.1\r\nHost: " + host + "\r\n\r\n"
 		self.socket.sendall(data.encode('utf-8'))
-		#print(type(self.socket.recv(10000)))
-		#print(result.split('\r'))
 
 	def close(self):
 		self.socket.close()
@@ -74,42 +104,55 @@ class HTTPClient(object):
 				buffer.extend(part)
 			else:
 				done = not part
+
 		return buffer.decode('utf-8')
 
 	def GET(self, url, args=None):
+		port = 80
+		host = ""
+
+		url = self.url_cleanup(url)
+
 		url = urlparse(url)
-		#print("url", url.netloc)
-		self.connect(url.netloc, 80)
-		#print("connected")
-		self.sendall(url)
-		#print("sendall")
-		message = self.recvall(self.socket)
-		#print(message)
-		m = re.search("HTTP\/1\.1 ([0-9]{3})[ A-Za-z]+(.*)",message,re.DOTALL)
-		code = m.group(1)
-		body = message
-		#body = m.group(2)
+
+		host, port = self.url_parse(url)
+		self.connect(host, port)
+
+		self.sendall(url,port,host, "GET ")
+
+		data = self.recvall(self.socket)
+
 		self.close()
-		#print(code)
-		#print(body)
+
+		code, body = self.parse_result(data)
+		
 		return HTTPResponse(code, body)
 
 	def POST(self, url, args=None):
+		port = 80
+		host = ""
+
+		url = self.url_cleanup(url)
+
 		url = urlparse(url)
-		self.connect(url.netloc, 80)
-		self.sendall(url)
-		message = self.recvall(self.socket)
-		m = re.search("HTTP\/1\.1 ([0-9]{3})[ A-Za-z]+(.*)",message,re.DOTALL)
-		code = m.group(1)
-		body = message
+
+		host, port = self.url_parse(url)
+		self.connect(host, port)
+
+		self.sendall(url,port,host, "POST ")
+
+		data = self.recvall(self.socket)
 		self.close()
+
+		code, body = self.parse_result(data)
+		
 		return HTTPResponse(code, body)
 
 	def command(self, url, command='get', args=None):
 		if (command.upper() == "POST"):
 			return self.POST( url, args )
 		else:
-			print("get request\n")
+			#print("get request\n")
 			return self.GET( url, args )
 
 if __name__ == "__main__":
@@ -119,6 +162,11 @@ if __name__ == "__main__":
 		help()
 		sys.exit(1)
 	elif (len(sys.argv) == 3):
+		#print("input: ", sys.argv[2], sys.argv[1])
 		print(client.command( sys.argv[2], sys.argv[1] ))
+		#client.command( sys.argv[2], sys.argv[1] )
+
 	else:
+		#print("input: ", sys.argv[1])
 		print(client.command( sys.argv[1] ))
+		#client.command( sys.argv[1] )
