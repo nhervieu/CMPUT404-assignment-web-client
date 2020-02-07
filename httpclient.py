@@ -37,7 +37,10 @@ class HTTPClient(object):
 
 	def connect(self, host, port):
 		self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		print("host: ", host)
+		print("port: ", port)
 		self.socket.connect((host, port))
+		self.socket.send(b'')
 		return None
 
 	def get_code(self, data):
@@ -67,6 +70,7 @@ class HTTPClient(object):
 
 	#return host, port, 
 	def url_parse(self, url):
+		port = 80
 		if not url.netloc:
 			return url.path, port
 		else: 
@@ -78,18 +82,33 @@ class HTTPClient(object):
 			else:
 				return url.netloc, port
 
-	def sendall(self, data, port, host, request='GET '):
+
+	def sendall(self, data, port, host, args=None, request='GET '):
+		header = ''
+
+		if args != None:
+			query = ''
+			for key in args:
+				value = args[key].replace("\r\n","%0D%0A")
+				value = args[key].replace("\n\r","%0D%0A")
+				value = value.replace("\r","0D")
+				value = value.replace("\n","0A")
+
+				query = query + key + "=" + value+"&"
+
 
 		if request == "GET ":
+			path = data.path
 			if not data.netloc:
-				path = data.params+data.query+data.fragment
+				path = data.params#+data.query+data.fragment
 			else:
-				path = data.path+data.params+data.query+data.fragment
+				path = data.path+data.params#+data.query+data.fragment
 
-			if not path:
-				path = "/"
+			if path == "/" or path == "":
+				header = 'GET / HTTP/1.0\r\nHost: '+host+'\r\n\r\n'
+			else:
+				header = 'GET '+path+' HTTP/1.0\r\nHost: '+host+'\r\n\r\n'
 
-			data = request + path + " HTTP/1.1\r\nHost: " + host + "\r\n" + "Content-Length: "+ "0" +"\r\n\r\n"
 
 		elif request == "POST ":
 			if not data.netloc:
@@ -101,13 +120,15 @@ class HTTPClient(object):
 				path = "/"
 
 			if data.query != "":
-				data = request + path + " HTTP/1.1\r\nHost: " + host + "Content-Length: "+ str(len(data.query)) + "\r\n" + "data.query"+ "\r\n\r\n"
+				header = request + path + " HTTP/1.0\r\nHost: " + host + "\r\n" +"Content-Length: "+ str(len(data.query)) + "\r\n\r\n" + data.query+ "\r\n\r\n"
+			elif args != None:
+				header = request + path + " HTTP/1.0\r\nHost: " + host + "\r\n" +"Content-type: application/x-www-form-urlencoded" + "\r\n" +"Content-Length: "+ str(len(query)-1) + "\r\n\r\n" + query[:-1]+ "\r\n\r\n"
 			else:
-				data = request + path + " HTTP/1.1\r\nHost: " + host  + "\r\n" + "Content-Length: "+ "0" +"\r\n\r\n"
+				header = request + path + " HTTP/1.0\r\nHost: " + host  + "\r\n" + "Content-Length: "+ "0" +"\r\n\r\n"
 
-
-		print(data)
-		self.socket.sendall(data.encode('utf-8'))
+		print("my post request: ")
+		print(header)
+		self.socket.sendall(header.encode('utf-8'))
 
 	def close(self):
 		self.socket.close()
@@ -130,19 +151,25 @@ class HTTPClient(object):
 		host = ""
 
 		url = self.url_cleanup(url)
+		print(url)
 
 		url = urlparse(url)
+		print(url)
 
 		host, port = self.url_parse(url)
 		self.connect(host, port)
 
-		self.sendall(url,port,host, "GET ")
+		self.sendall(url,port,host, args, "GET ")
 
 		data = self.recvall(self.socket)
+
+		#print result of request to stdout
+		print(data)
 
 		self.close()
 
 		code, body = self.parse_result(data)
+
 		
 		return HTTPResponse(code, body)
 
@@ -157,9 +184,13 @@ class HTTPClient(object):
 		host, port = self.url_parse(url)
 		self.connect(host, port)
 
-		self.sendall(url,port,host, "POST ")
+		self.sendall(url,port,host,args, "POST ")
 
 		data = self.recvall(self.socket)
+
+		#print result of request to stdout
+		print(data)
+
 		self.close()
 
 		code, body = self.parse_result(data)
@@ -170,7 +201,6 @@ class HTTPClient(object):
 		if (command.upper() == "POST"):
 			return self.POST( url, args )
 		else:
-			#print("get request\n")
 			return self.GET( url, args )
 
 if __name__ == "__main__":
@@ -180,11 +210,7 @@ if __name__ == "__main__":
 		help()
 		sys.exit(1)
 	elif (len(sys.argv) == 3):
-		#print("input: ", sys.argv[2], sys.argv[1])
 		print(client.command( sys.argv[2], sys.argv[1] ))
-		#client.command( sys.argv[2], sys.argv[1] )
 
 	else:
-		#print("input: ", sys.argv[1])
 		print(client.command( sys.argv[1] ))
-		#client.command( sys.argv[1] )
