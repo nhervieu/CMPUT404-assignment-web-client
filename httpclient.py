@@ -55,6 +55,11 @@ class HTTPClient(object):
 	def parse_result(self,data):
 		m = re.search("HTTP\/1\.[10] ([0-9]{3})[ A-Za-z]+(.*)",data,re.DOTALL)
 		code = int(m.group(1))
+
+		m = re.search("\r\n({.*})",data)
+		if m:
+			data = m.group(1)
+
 		if code == 404:
 			return code, "File not Found"
 		else:
@@ -86,23 +91,26 @@ class HTTPClient(object):
 	def sendall(self, data, port, host, args=None, request='GET '):
 		header = ''
 
+		#print("ARGS: " , args)
+		query = ''
+
 		if args != None:
-			query = ''
 			for key in args:
-				value = args[key].replace("\r\n","%0D%0A")
-				value = args[key].replace("\n\r","%0D%0A")
-				value = value.replace("\r","0D")
-				value = value.replace("\n","0A")
+				value = args[key].replace("\r","%0D")
+				value = value.replace("\n","%0A")
+				value = value.replace(" ", "+")
 
 				query = query + key + "=" + value+"&"
+		print(query)
 
+		path = data.path
 
 		if request == "GET ":
-			path = data.path
+			
 			if not data.netloc:
 				path = data.params#+data.query+data.fragment
 			else:
-				path = data.path+data.params#+data.query+data.fragment
+				path = data.path#+data.params+data.query+data.fragment
 
 			if path == "/" or path == "":
 				header = 'GET / HTTP/1.0\r\nHost: '+host+'\r\n\r\n'
@@ -111,20 +119,33 @@ class HTTPClient(object):
 
 
 		elif request == "POST ":
+
 			if not data.netloc:
-				path = data.params
+				path = data.params#+data.query+data.fragment
 			else:
-				path = data.path+data.params
+				path = data.path+data.params#+data.query+data.fragment
 
-			if not path:
-				path = "/"
+			body = query[:-1]
+			length = str(len(body.encode('utf-8')))
 
-			if data.query != "":
-				header = request + path + " HTTP/1.0\r\nHost: " + host + "\r\n" +"Content-Length: "+ str(len(data.query)) + "\r\n\r\n" + data.query+ "\r\n\r\n"
-			elif args != None:
-				header = request + path + " HTTP/1.0\r\nHost: " + host + "\r\n" +"Content-type: application/x-www-form-urlencoded" + "\r\n" +"Content-Length: "+ str(len(query)-1) + "\r\n\r\n" + query[:-1]+ "\r\n\r\n"
+			if path == "/" or path == "":
+				#header = 'POST / HTTP/1.0\r\nHost: '+host+'\r\n\r\n'
+				header = 'POST ' + path + " HTTP/1.0\r\nHost: " + host + "\r\n" +"Content-type: application/x-www-form-urlencoded" + "\r\n" +"Content-Length: "+ length + "\r\n\r\n" + body
+
 			else:
-				header = request + path + " HTTP/1.0\r\nHost: " + host  + "\r\n" + "Content-Length: "+ "0" +"\r\n\r\n"
+				#header = 'POST '+path+' HTTP/1.0\r\nHost: '+host+'\r\n\r\n'
+				header = 'POST ' + path + " HTTP/1.0\r\nHost: " + host + "\r\n" +"Content-type: application/x-www-form-urlencoded" + "\r\n" +"Content-Length: "+ length + "\r\n\r\n" + body
+
+
+			#header = 'POST ' + path + " HTTP/1.0\r\nHost: " + host + "\r\n" +"Content-type: application/x-www-form-urlencoded" + "\r\n" +"Content-Length: "+ length + "\r\n\r\n" + body
+
+
+			# if data.query != "":
+			# 	header = request + path + " HTTP/1.0\r\nHost: " + host + "\r\n" +"Content-Length: "+ str(len(data.query)) + "\r\n\r\n" + data.query+ "\r\n\r\n"
+			# elif args != None:
+			# 	header = request + path + " HTTP/1.0\r\nHost: " + host + "\r\n" +"Content-type: application/x-www-form-urlencoded" + "\r\n" +"Content-Length: "+ str(len(query)-1) + "\r\n\r\n" + query[:-1]
+			# else:
+			# 	header = request + path + " HTTP/1.0\r\nHost: " + host  + "\r\n" + "Content-Length: "+ "0" +"\r\n\r\n"
 
 		print("my post request: ")
 		print(header)
@@ -151,10 +172,10 @@ class HTTPClient(object):
 		host = ""
 
 		url = self.url_cleanup(url)
-		print(url)
+		#print(url)
 
 		url = urlparse(url)
-		print(url)
+		#print(url)
 
 		host, port = self.url_parse(url)
 		self.connect(host, port)
@@ -194,6 +215,8 @@ class HTTPClient(object):
 		self.close()
 
 		code, body = self.parse_result(data)
+
+
 		
 		return HTTPResponse(code, body)
 
@@ -214,3 +237,12 @@ if __name__ == "__main__":
 
 	else:
 		print(client.command( sys.argv[1] ))
+
+
+# http://c2.com/cgi/wiki?CommonLispHyperSpec
+# ParseResult(scheme='http', netloc='c2.com', path='/cgi/wiki', params='', query='CommonLispHyperSpec', fragment='')
+# host:  c2.com
+# port:  80
+# my post request: 
+# GET /cgi/wiki HTTP/1.0
+# Host: c2.com
